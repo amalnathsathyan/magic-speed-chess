@@ -1,10 +1,6 @@
 use anchor_lang::prelude::*;
-
-use crate::errors::ChessError;
-use crate::events::*;
 use crate::state::*;
-use crate::utils::*;
-use crate::instructions::make_move::MakeMove;
+use crate::errors::ChessError;
 
 #[derive(Accounts)]
 pub struct ClaimTimeoutWin<'info> {
@@ -30,7 +26,7 @@ pub fn handler(ctx: Context<ClaimTimeoutWin>) -> Result<()> {
     );
     
     // Determine player color and opponent
-    let (player_color, opponent_color, opponent_last_move_time) = 
+    let (_player_color, opponent_color, opponent_last_move_time) = 
         if chess_match.white_player == player.key() {
             (PlayerColor::White, PlayerColor::Black, chess_match.black_last_move_time)
         } else if chess_match.black_player == Some(player.key()) {

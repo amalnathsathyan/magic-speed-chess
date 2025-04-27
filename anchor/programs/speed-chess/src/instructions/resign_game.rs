@@ -3,8 +3,6 @@ use anchor_lang::prelude::*;
 use crate::errors::ChessError;
 use crate::events::*;
 use crate::state::*;
-use crate::utils::*;
-use crate::instructions::make_move::MakeMove;
 
 #[derive(Accounts)]
 pub struct ResignGame<'info> {

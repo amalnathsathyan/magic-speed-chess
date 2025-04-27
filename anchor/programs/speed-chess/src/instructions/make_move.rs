@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount};
+use anchor_spl::token::{Token, TokenAccount};
 
 use crate::errors::ChessError;
 use crate::events::*;
@@ -93,21 +93,11 @@ pub fn handler(
         });
         process_payout(
             &ctx.accounts.chess_match,
-            &ctx.accounts.player,
-            &ctx.accounts.match_token_account,
-            &ctx.accounts.player_token_account,
-            &ctx.accounts.platform_token_account,
-            &ctx.accounts.token_program
         )?;
 
         // And in make_move.rs, line 159
         process_draw_payout(
-            &ctx.accounts.chess_match,
-            &ctx.accounts.player,
-            &ctx.accounts.match_token_account,
-            &ctx.accounts.player_token_account,
-            &ctx.accounts.platform_token_account,
-            &ctx.accounts.token_program,
+            &ctx.accounts.chess_match
         )?;
 
         return Ok(());
@@ -163,11 +153,6 @@ pub fn handler(
             // Process payout to winner
             process_payout(
                 chess_match,
-                &ctx.accounts.player,
-                &ctx.accounts.match_token_account,
-                &ctx.accounts.player_token_account,
-                &ctx.accounts.platform_token_account,
-                &ctx.accounts.token_program
             )?;
         }
         MoveResult::Stalemate => {
@@ -183,11 +168,6 @@ pub fn handler(
             // Process refund to both players
             process_payout(
                 chess_match,
-                &ctx.accounts.player,
-                &ctx.accounts.match_token_account,
-                &ctx.accounts.player_token_account,
-                &ctx.accounts.platform_token_account,
-                &ctx.accounts.token_program
             )?;
         }
     }

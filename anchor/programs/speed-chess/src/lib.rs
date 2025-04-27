@@ -1,16 +1,13 @@
 // lib.rs
 use anchor_lang::prelude::*;
 
-pub mod instructions;
-pub mod state;
 pub mod errors;
 pub mod events;
+pub mod instructions;
+pub mod state;
 pub mod utils;
 
 use instructions::*;
-
-use crate::instructions::initialize_match::InitializeMatch;
-use crate::instructions::resign_game::ResignGame;
 
 declare_id!("9z5kWJ5KSPfZXmCzv6cJyFXc6Y7tmsH5hj7SUy8aZji9");
 

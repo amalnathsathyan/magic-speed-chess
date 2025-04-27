@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use crate::errors::ChessError;
 use crate::events::*;
 use crate::state::*;
@@ -7,11 +6,6 @@ use crate::state::*;
 // Helper function to process payout to winner
 pub fn process_payout(
     chess_match: &Account<ChessMatch>,
-    player: &Signer,
-    match_token_account: &Account<TokenAccount>,
-    player_token_account: &Account<TokenAccount>,
-    platform_token_account: &Account<TokenAccount>,
-    token_program: &Program<Token>,
 ) -> Result<()> {
     // Calculate fee amount (2% of pot)
     let total_pot = chess_match.total_pot;
@@ -48,11 +42,6 @@ pub fn process_payout(
 // Helper function to process refunds in case of a draw
 pub fn process_draw_payout(
     chess_match: &Account<ChessMatch>,
-    player: &Signer,
-    match_token_account: &Account<TokenAccount>,
-    player_token_account: &Account<TokenAccount>,
-    platform_token_account: &Account<TokenAccount>,
-    token_program: &Program<Token>,
 ) -> Result<()> {
     // In a draw, both players get their bets back minus half the platform fee each
     let total_pot = chess_match.total_pot;
