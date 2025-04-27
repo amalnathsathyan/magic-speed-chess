@@ -1,5 +1,5 @@
 [package]
-name = "counter"
+name = "speed_chess"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
@@ -19,4 +19,5 @@ idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
 anchor-lang = "0.31.1"
+anchor-spl = {version = "0.31.1", features = ["idl-build"]}
 

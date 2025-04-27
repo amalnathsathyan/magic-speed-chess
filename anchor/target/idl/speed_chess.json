@@ -1,0 +1,865 @@
+{
+  "address": "9z5kWJ5KSPfZXmCzv6cJyFXc6Y7tmsH5hj7SUy8aZji9",
+  "metadata": {
+    "name": "speed_chess",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "claim_timeout_win",
+      "discriminator": [
+        175,
+        234,
+        101,
+        151,
+        53,
+        30,
+        177,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "chess_match",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_match",
+      "discriminator": [
+        156,
+        133,
+        52,
+        179,
+        176,
+        29,
+        64,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "chess_match",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  101,
+                  115,
+                  115,
+                  95,
+                  109,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "match_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "betting_token_mint"
+        },
+        {
+          "name": "player_token_account",
+          "writable": true
+        },
+        {
+          "name": "match_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "match_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "match_id",
+          "type": "string"
+        },
+        {
+          "name": "bet_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "join_match",
+      "discriminator": [
+        244,
+        8,
+        47,
+        130,
+        192,
+        59,
+        179,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "chess_match",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player_token_account",
+          "writable": true
+        },
+        {
+          "name": "match_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "bet_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "make_move",
+      "discriminator": [
+        78,
+        77,
+        152,
+        203,
+        222,
+        211,
+        208,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "chess_match",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player_token_account",
+          "writable": true
+        },
+        {
+          "name": "platform_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "from_row",
+          "type": "u8"
+        },
+        {
+          "name": "from_col",
+          "type": "u8"
+        },
+        {
+          "name": "to_row",
+          "type": "u8"
+        },
+        {
+          "name": "to_col",
+          "type": "u8"
+        },
+        {
+          "name": "promotion",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "PieceType"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "resign_game",
+      "discriminator": [
+        43,
+        29,
+        143,
+        188,
+        152,
+        151,
+        136,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "chess_match",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ChessMatch",
+      "discriminator": [
+        72,
+        241,
+        122,
+        67,
+        252,
+        229,
+        79,
+        237
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "DrawPayoutEvent",
+      "discriminator": [
+        204,
+        185,
+        220,
+        244,
+        158,
+        169,
+        10,
+        187
+      ]
+    },
+    {
+      "name": "GameEndedEvent",
+      "discriminator": [
+        124,
+        244,
+        251,
+        112,
+        20,
+        68,
+        87,
+        116
+      ]
+    },
+    {
+      "name": "MatchCreatedEvent",
+      "discriminator": [
+        101,
+        99,
+        74,
+        54,
+        121,
+        190,
+        111,
+        238
+      ]
+    },
+    {
+      "name": "MoveMadeEvent",
+      "discriminator": [
+        116,
+        181,
+        208,
+        158,
+        192,
+        84,
+        32,
+        251
+      ]
+    },
+    {
+      "name": "PayoutEvent",
+      "discriminator": [
+        84,
+        234,
+        195,
+        72,
+        143,
+        79,
+        70,
+        82
+      ]
+    },
+    {
+      "name": "PlayerJoinedEvent",
+      "discriminator": [
+        80,
+        201,
+        181,
+        60,
+        46,
+        141,
+        44,
+        189
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MatchAlreadyFull",
+      "msg": "The match is already full"
+    },
+    {
+      "code": 6001,
+      "name": "AlreadyJoined",
+      "msg": "You have already joined this match"
+    },
+    {
+      "code": 6002,
+      "name": "NotYourTurn",
+      "msg": "It's not your turn"
+    },
+    {
+      "code": 6003,
+      "name": "NotOpponentsTurn",
+      "msg": "It's not your opponent's turn"
+    },
+    {
+      "code": 6004,
+      "name": "NotAPlayer",
+      "msg": "You are not a player in this game"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidMove",
+      "msg": "Invalid move"
+    },
+    {
+      "code": 6006,
+      "name": "GameNotActive",
+      "msg": "The game is not active"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidBetAmount",
+      "msg": "Invalid bet amount"
+    },
+    {
+      "code": 6008,
+      "name": "NoOpponent",
+      "msg": "No opponent has joined yet"
+    },
+    {
+      "code": 6009,
+      "name": "NoWinner",
+      "msg": "No winner has been determined"
+    },
+    {
+      "code": 6010,
+      "name": "OpponentNotTimedOut",
+      "msg": "Your opponent has not timed out yet"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidOwner",
+      "msg": "The token account's owner does not match the player"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidMint",
+      "msg": "The token account's mint does not match the provided mint"
+    }
+  ],
+  "types": [
+    {
+      "name": "ChessMatch",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "white_player",
+            "type": "pubkey"
+          },
+          {
+            "name": "black_player",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "current_turn",
+            "type": {
+              "defined": {
+                "name": "PlayerColor"
+              }
+            }
+          },
+          {
+            "name": "white_last_move_time",
+            "type": "i64"
+          },
+          {
+            "name": "black_last_move_time",
+            "type": "i64"
+          },
+          {
+            "name": "move_timeout",
+            "type": "i64"
+          },
+          {
+            "name": "game_status",
+            "type": {
+              "defined": {
+                "name": "GameStatus"
+              }
+            }
+          },
+          {
+            "name": "board",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    {
+                      "option": {
+                        "defined": {
+                          "name": "Piece"
+                        }
+                      }
+                    },
+                    8
+                  ]
+                },
+                8
+              ]
+            }
+          },
+          {
+            "name": "total_pot",
+            "type": "u64"
+          },
+          {
+            "name": "platform_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "betting_token_mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DrawPayoutEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "white_player",
+            "type": "pubkey"
+          },
+          {
+            "name": "black_player",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_each",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameEndReason",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Checkmate"
+          },
+          {
+            "name": "Stalemate"
+          },
+          {
+            "name": "Resignation"
+          },
+          {
+            "name": "Timeout"
+          },
+          {
+            "name": "Agreement"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameEndedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "winner",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PlayerColor"
+                }
+              }
+            }
+          },
+          {
+            "name": "reason",
+            "type": {
+              "defined": {
+                "name": "GameEndReason"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "WaitingForOpponent"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "WhiteWin"
+          },
+          {
+            "name": "BlackWin"
+          },
+          {
+            "name": "Draw"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MatchCreatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "bet_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MoveMadeEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "color",
+            "type": {
+              "defined": {
+                "name": "PlayerColor"
+              }
+            }
+          },
+          {
+            "name": "algebraic_move",
+            "type": "string"
+          },
+          {
+            "name": "from_row",
+            "type": "u8"
+          },
+          {
+            "name": "from_col",
+            "type": "u8"
+          },
+          {
+            "name": "to_row",
+            "type": "u8"
+          },
+          {
+            "name": "to_col",
+            "type": "u8"
+          },
+          {
+            "name": "promotion",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PieceType"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayoutEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Piece",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "piece_type",
+            "type": {
+              "defined": {
+                "name": "PieceType"
+              }
+            }
+          },
+          {
+            "name": "color",
+            "type": {
+              "defined": {
+                "name": "PlayerColor"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PieceType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pawn"
+          },
+          {
+            "name": "Knight"
+          },
+          {
+            "name": "Bishop"
+          },
+          {
+            "name": "Rook"
+          },
+          {
+            "name": "Queen"
+          },
+          {
+            "name": "King"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerColor",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "White"
+          },
+          {
+            "name": "Black"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerJoinedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_id",
+            "type": "string"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "color",
+            "type": {
+              "defined": {
+                "name": "PlayerColor"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
