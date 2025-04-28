@@ -9,7 +9,11 @@ use crate::state::*;
 #[derive(Accounts)]
 #[instruction(bet_amount: u64)]
 pub struct JoinMatch<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"chess_match", chess_match.match_id.as_bytes()],
+        bump,
+    )]
     pub chess_match: Account<'info, ChessMatch>,
     
     #[account(mut)]
