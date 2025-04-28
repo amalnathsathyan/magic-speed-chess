@@ -43,6 +43,7 @@
     "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.1.4",
     "@types/bn.js": "^5.1.6",
+    "@types/chai": "^5.2.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.14.1",
     "@types/react": "^19.1.2",
