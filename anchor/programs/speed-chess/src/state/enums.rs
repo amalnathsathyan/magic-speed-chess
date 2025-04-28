@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -11,12 +12,14 @@ pub enum PieceType {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum PlayerColor {
     White,
     Black,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum GameStatus {
     WaitingForOpponent,
     Active,
@@ -26,6 +29,7 @@ pub enum GameStatus {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum GameEndReason {
     Checkmate,
     Stalemate,
@@ -35,6 +39,7 @@ pub enum GameEndReason {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum MoveResult {
     Normal,
     Checkmate,
