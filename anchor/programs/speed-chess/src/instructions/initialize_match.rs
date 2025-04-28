@@ -13,7 +13,7 @@ pub struct InitializeMatch<'info> {
     #[account(
         init,
         payer = player,
-        space = 8 + size_of::<ChessMatch>() + match_id.len(),
+        space = 8 + ChessMatch::INIT_SPACE,
         seeds = [b"chess_match", match_id.as_bytes()],
         bump
     )]
