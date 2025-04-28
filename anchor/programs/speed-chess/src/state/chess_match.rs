@@ -3,7 +3,9 @@ use super::enums::*;
 use super::piece::*;
 
 #[account]
+#[derive(InitSpace)]
 pub struct ChessMatch {
+    #[max_len(12)]
     pub match_id: String,
     pub white_player: Pubkey,
     pub black_player: Option<Pubkey>,
