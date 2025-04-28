@@ -1,8 +1,8 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "types": ["jest", "node"],
+    "module": "es2015",
+    "types": ["mocha", "node"],
     "typeRoots": ["./node_modules/@types"],
     "lib": ["es2015"],
     "target": "es6",
