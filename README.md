@@ -1,39 +1,20 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [
-`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Speed Chess on Solana
 
-## Getting Started
+A high-performance speed chess platform built on the Solana blockchain, leveraging Magic Block Ephemeral rollups for lightning-fast gameplay, secure transactions, and decentralized matchmaking.
 
-First, run the development server:
+## Features
+- **Ultra-Low Latency Gameplay**: Experience chess with minimal delay through Magic Block Ephemeral rollup technology
+- **Blockchain**: Solana
+- **Scaling Solution**: Magic Block Ephemeral rollups
+- **Smart Contracts**: Written in Rust using Solana's program model
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Architecture
+![Untitled-2025-03-16-1714](https://github.com/user-attachments/assets/27e9855c-7b67-4d36-a3bd-41787b910be4)
+![joinmatch](https://github.com/user-attachments/assets/fd6bbab2-457c-4364-9599-e596bb965375)
+![makemove](https://github.com/user-attachments/assets/ef97deb6-ae47-4c6e-816c-b3896e095b2f)
+![resign](https://github.com/user-attachments/assets/111a61d6-ea5d-4a51-badd-b5ee44acee85)
+![timout](https://github.com/user-attachments/assets/a6a91c75-1a0b-4ea1-a659-cde79e11afbd)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions
-are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use
-the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme)
-from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for
-more details.
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
