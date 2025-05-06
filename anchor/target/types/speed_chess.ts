@@ -159,7 +159,32 @@ export type SpeedChess = {
       "accounts": [
         {
           "name": "chessMatch",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  101,
+                  115,
+                  115,
+                  95,
+                  109,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "chess_match.match_id",
+                "account": "chessMatch"
+              }
+            ]
+          }
         },
         {
           "name": "player",
