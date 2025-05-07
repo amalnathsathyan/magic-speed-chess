@@ -6,13 +6,15 @@ use crate::state::*;
 
 #[derive(Accounts)]
 pub struct ResignGame<'info> {
-    #[account(mut)]
+    #[account(mut,
+        seeds = [b"chess_match", chess_match.match_id.as_bytes()],
+        bump,
+    )]
     pub chess_match: Account<'info, ChessMatch>,
     
     #[account(mut)]
     pub player: Signer<'info>,
     
-    // Additional accounts for payout - would match the MakeMove accounts
 }
 
 pub fn handler(ctx: Context<ResignGame>) -> Result<()> {

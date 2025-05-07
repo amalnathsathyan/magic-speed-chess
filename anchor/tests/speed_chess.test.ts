@@ -15,9 +15,12 @@ describe('speed_chess', () => {
   // Keypairs and accounts
   const whitePlayer = Keypair.generate();
   const blackPlayer = Keypair.generate();
+  const thirdParty = Keypair.generate();
   let mint: PublicKey;
   let whiteTokenAccount: PublicKey;
   let blackTokenAccount: PublicKey;
+  let platformFeeTokenAccount: PublicKey;
+  let thirdPartyTokenAccount: PublicKey;
   const matchId = 'test_match';
   const betAmount = new BN(10_000_000);
 
@@ -32,7 +35,7 @@ describe('speed_chess', () => {
   );
 
   // Platform fee account (mock)
-  const platformTokenAccount = Keypair.generate();
+  const platformFeeWallet = Keypair.generate();
 
   beforeAll(async () => {
     // Fund players
@@ -45,6 +48,11 @@ describe('speed_chess', () => {
       SystemProgram.transfer({
         fromPubkey: payer.publicKey,
         toPubkey: blackPlayer.publicKey,
+        lamports: 1_000_000_000,
+      }),
+      SystemProgram.transfer({
+        fromPubkey: payer.publicKey,
+        toPubkey: thirdParty.publicKey,
         lamports: 1_000_000_000,
       })
     );
@@ -73,6 +81,13 @@ describe('speed_chess', () => {
       blackPlayer.publicKey
     );
 
+    thirdPartyTokenAccount = await createAccount(
+      provider.connection,
+      payer.payer,
+      mint,
+      thirdParty.publicKey
+    );
+
     // Mint tokens to players
     await mintTo(
       provider.connection,
@@ -91,12 +106,21 @@ describe('speed_chess', () => {
       100_000_000
     );
 
-    // Create platform token account
-    await createAccount(
+    await mintTo(
       provider.connection,
       payer.payer,
       mint,
-      platformTokenAccount.publicKey
+      thirdPartyTokenAccount,
+      payer.publicKey,
+      100_000_000
+    );
+
+    // Create platform token account
+    platformFeeTokenAccount = await createAccount(
+      provider.connection,
+      payer.payer,
+      mint,
+      platformFeeWallet.publicKey
     );
   });
 
@@ -158,7 +182,26 @@ describe('speed_chess', () => {
     }
   });
 
-  it('Join Match', async () => {
+  it('Fail Join Match - White player AlreadyJoined', async () => {
+    try {
+      await program.methods
+        .joinMatch(betAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: whitePlayer.publicKey,
+          playerTokenAccount: whiteTokenAccount,
+          matchTokenAccount: matchTokenAccountPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([whitePlayer])
+        .rpc();
+      assert.fail('Should have failed when white player tries to join a match he created');
+    } catch (err) {
+      assert.include(err.toString(), 'You have already joined this match');
+    }
+  });
+
+  it('Join Match - Blackplayer Joins', async () => {
     await program.methods
       .joinMatch(betAmount)
       .accounts({
@@ -177,109 +220,124 @@ describe('speed_chess', () => {
     assert.equal(chessMatch.totalPot.toNumber(), betAmount.toNumber() * 2);
   });
 
-  it('Fail Join Match - Already Joined', async () => {
+  it('Fail Join Match - Blackplayer tries to join again - The match is already full', async () => {
     try {
       await program.methods
         .joinMatch(betAmount)
         .accounts({
           chessMatch: chessMatchPda,
-          player: whitePlayer.publicKey,
-          playerTokenAccount: whiteTokenAccount,
+          player: blackPlayer.publicKey,
+          playerTokenAccount: blackTokenAccount,
           matchTokenAccount: matchTokenAccountPda,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .signers([whitePlayer])
+        .signers([blackPlayer])
         .rpc();
-      assert.fail('Should have failed when white player tries to join');
+      assert.fail('Should have failed when black player tries to join the match again');
     } catch (err) {
       assert.include(err.toString(), 'The match is already full');
     }
   });
-})
 
-//   it('Make Move', async () => {
-//     // Move pawn from e2 to e4 (row 1 to 3, col 4)
-//     const fromRow = 1;
-//     const fromCol = 4;
-//     const toRow = 3;
-//     const toCol = 4;
+  it('Fail Join Match - Third Party Joins - The match is already full', async () => {
+    try {
+      await program.methods
+        .joinMatch(betAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: thirdParty.publicKey,
+          playerTokenAccount: thirdPartyTokenAccount,
+          matchTokenAccount: matchTokenAccountPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([thirdParty])
+        .rpc();
+      assert.fail('Should have failed when third player tries to join the match again');
+    } catch (err) {
+      assert.include(err.toString(), 'The match is already full');
+    }
+  });
 
-//     await program.methods
-//       .makeMove(fromRow, fromCol, toRow, toCol, null)
-//       .accounts({
-//         chessMatch: chessMatchPda,
-//         player: whitePlayer.publicKey,
-//         matchTokenAccount: matchTokenAccountPda,
-//         playerTokenAccount: whiteTokenAccount,
-//         platformTokenAccount: platformTokenAccount.publicKey,
-//         tokenProgram: TOKEN_PROGRAM_ID,
-//       })
-//       .signers([whitePlayer])
-//       .rpc();
 
-//     const chessMatch = await program.account.chessMatch.fetch(chessMatchPda);
-//     assert.equal(chessMatch.currentTurn, 'black');
-//     assert.isNotNull(chessMatch.board[toRow][toCol]);
-//     assert.equal(chessMatch.board[toRow][toCol].pieceType, 'pawn');
-//     assert.equal(chessMatch.board[toRow][toCol].color, 'white');
-//     assert.isNull(chessMatch.board[fromRow][fromCol]);
-//   });
+  it('Make Move', async () => {
+    // Move pawn from e2 to e4 (row 1 to 3, col 4)
+    const fromRow = 1;
+    const fromCol = 4;
+    const toRow = 3;
+    const toCol = 4;
 
-//   it('Fail Make Move - Not Your Turn', async () => {
-//     try {
-//       await program.methods
-//         .makeMove(1, 4, 3, 4, null)
-//         .accounts({
-//           chessMatch: chessMatchPda,
-//           player: whitePlayer.publicKey,
-//           matchTokenAccount: matchTokenAccountPda,
-//           playerTokenAccount: whiteTokenAccount,
-//           platformTokenAccount: platformTokenAccount.publicKey,
-//           tokenProgram: TOKEN_PROGRAM_ID,
-//         })
-//         .signers([whitePlayer])
-//         .rpc();
-//       assert.fail('Should have failed when not player\'s turn');
-//     } catch (err) {
-//       assert.include(err.toString(), 'NotYourTurn');
-//     }
-//   });
+    await program.methods
+      .makeMove(fromRow, fromCol, toRow, toCol, null)
+      .accounts({
+        chessMatch: chessMatchPda,
+        player: whitePlayer.publicKey,
+        matchTokenAccount: matchTokenAccountPda,
+        playerTokenAccount: whiteTokenAccount,
+        platformTokenAccount: platformFeeTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([whitePlayer])
+      .rpc();
 
-//   it('Resign Game', async () => {
-//     await program.methods
-//       .resignGame()
-//       .accounts({
-//         chessMatch: chessMatchPda,
-//         player: whitePlayer.publicKey,
-//         matchTokenAccount: matchTokenAccountPda,
-//         playerTokenAccount: blackTokenAccount,
-//         platformTokenAccount: platformTokenAccount.publicKey,
-//         tokenProgram: TOKEN_PROGRAM_ID,
-//       })
-//       .signers([whitePlayer])
-//       .rpc();
+    const chessMatch = await program.account.chessMatch.fetch(chessMatchPda);
+    assert.ok('black' in chessMatch.currentTurn);
+    assert.isNotNull(chessMatch.board[toRow][toCol]);
+    assert.ok('pawn' in chessMatch.board[toRow][toCol].pieceType);
+    assert.ok('white' in chessMatch.board[toRow][toCol].color );
+    assert.isNull(chessMatch.board[fromRow][fromCol]);
+  });
 
-//     const chessMatch = await program.account.chessMatch.fetch(chessMatchPda);
-//     assert.equal(chessMatch.gameStatus, 'blackWin');
-//   });
+  it('Fail Make Move - Not Your Turn', async () => {
+    try {
+      await program.methods
+        .makeMove(1, 4, 3, 4, null)
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: whitePlayer.publicKey,
+          matchTokenAccount: matchTokenAccountPda,
+          playerTokenAccount: whiteTokenAccount,
+          platformTokenAccount: platformFeeTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([whitePlayer])
+        .rpc();
+      assert.fail('Should have failed when not player\'s turn');
+    } catch (err) {
+      assert.include(err.toString(), 'NotYourTurn');
+    }
+  });
 
-//   it('Fail Claim Timeout Win - Game Not Active', async () => {
-//     try {
-//       await program.methods
-//         .claimTimeoutWin()
-//         .accounts({
-//           chessMatch: chessMatchPda,
-//           player: blackPlayer.publicKey,
-//           matchTokenAccount: matchTokenAccountPda,
-//           playerTokenAccount: blackTokenAccount,
-//           platformTokenAccount: platformTokenAccount.publicKey,
-//           tokenProgram: TOKEN_PROGRAM_ID,
-//         })
-//         .signers([blackPlayer])
-//         .rpc();
-//       assert.fail('Should have failed when game is not active');
-//     } catch (err) {
-//       assert.include(err.toString(), 'GameNotActive');
-//     }
-//   });
-// });
+  it('Resign Game', async () => {
+    await program.methods
+      .resignGame()
+      .accounts({
+        chessMatch: chessMatchPda,
+        player: whitePlayer.publicKey,
+      })
+      .signers([whitePlayer])
+      .rpc();
+
+    const chessMatch = await program.account.chessMatch.fetch(chessMatchPda);
+    assert.ok('blackWin' in chessMatch.gameStatus);
+  });
+
+  it('Fail Claim Timeout Win - Game Not Active', async () => {
+    try {
+      await program.methods
+        .claimTimeoutWin()
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: blackPlayer.publicKey,
+          matchTokenAccount: matchTokenAccountPda,
+          playerTokenAccount: blackTokenAccount,
+          platformTokenAccount: platformFeeTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([blackPlayer])
+        .rpc();
+      assert.fail('Should have failed when game is not active');
+    } catch (err) {
+      assert.include(err.toString(), 'GameNotActive');
+    }
+  });
+});
