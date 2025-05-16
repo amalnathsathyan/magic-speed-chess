@@ -1,57 +1,48 @@
-// src/chess_logic.rs
+// src/utils/chess_logic.rs
 use anchor_lang::prelude::*;
 use crate::errors::ChessError;
-use crate::state::*; // This now brings in EnPassantSquare, CastlingRights, Piece, Enums etc.
+use crate::state::{ChessMatch, MoveResult, PlayerColor, PieceType, EnPassantSquare, Piece, CastlingRights}; // Ensure all used state types are here
 
-// Helper function to initialize a chess board
 pub fn initialize_chess_board() -> [[Option<Piece>; 8]; 8] {
     let mut board = [[None; 8]; 8];
     
-    // Set up pawns
     for col in 0..8 {
-        board[1][col] = Some(Piece { // White pawns on row 1 (0-indexed)
-            piece_type: PieceType::Pawn,
-            color: PlayerColor::White,
-        });
-        board[6][col] = Some(Piece { // Black pawns on row 6 (0-indexed)
-            piece_type: PieceType::Pawn,
-            color: PlayerColor::Black,
-        });
+        board[1][col] = Some(Piece { piece_type: PieceType::Pawn, color: PlayerColor::White });
+        board[6][col] = Some(Piece { piece_type: PieceType::Pawn, color: PlayerColor::Black });
     }
     
-    // Set up other pieces
-    let back_row_piece_types = [
+    let back_row_types = [
         PieceType::Rook, PieceType::Knight, PieceType::Bishop, PieceType::Queen,
         PieceType::King, PieceType::Bishop, PieceType::Knight, PieceType::Rook,
     ];
     
-    for (col, &piece_type) in back_row_piece_types.iter().enumerate() {
-        board[0][col] = Some(Piece { // White back rank on row 0
-            piece_type,
-            color: PlayerColor::White,
-        });
-        board[7][col] = Some(Piece { // Black back rank on row 7
-            piece_type,
-            color: PlayerColor::Black,
-        });
+    // Corrected loop for white back row
+    for (col, &piece_type) in back_row_types.iter().enumerate() {
+        board[0][col] = Some(Piece { piece_type, color: PlayerColor::White });
+    }
+    
+    for (col, &piece_type) in back_row_types.iter().enumerate() {
+        board[7][col] = Some(Piece { piece_type, color: PlayerColor::Black });
     }
     board
 }
 
 // --- Main function to validate and apply a chess move ---
 pub fn validate_and_apply_move(
-    board: &mut [[Option<Piece>; 8]; 8],
+    game_state: &mut ChessMatch,
     from_row: u8,
     from_col: u8,
     to_row: u8,
     to_col: u8,
-    player_color: PlayerColor,
+    player_color: PlayerColor, // Should match game_state.current_turn when called
     promotion: Option<PieceType>,
-    castling_rights: &mut CastlingRights,
-    en_passant_target: &mut Option<EnPassantSquare>,
-    halfmove_clock: &mut u8,
-    fullmove_number: &mut u16, // Added fullmove_number
 ) -> Result<MoveResult> {
+    // 0. Consistency check (optional but good practice)
+    if game_state.current_turn != player_color {
+        msg!("Inconsistency: player_color arg ({:?}) does not match game_state.current_turn ({:?})", player_color, game_state.current_turn);
+        return err!(ChessError::NotYourTurn); // Or a more specific internal error
+    }
+
     // 1. Basic pre-move validations
     if from_row > 7 || from_col > 7 || to_row > 7 || to_col > 7 {
         return err!(ChessError::InvalidMoveOutOfBounds);
@@ -60,8 +51,9 @@ pub fn validate_and_apply_move(
         return err!(ChessError::InvalidMoveIllegalPieceMovement);
     }
 
-    let source_piece_data = board[from_row as usize][from_col as usize]
+    let source_piece_data = game_state.board[from_row as usize][from_col as usize]
         .as_ref()
+        .cloned() // Clone to avoid issues if game_state.board is modified before this is used again
         .ok_or(error!(ChessError::InvalidMoveEmptySource))?;
 
     if source_piece_data.color != player_color {
@@ -69,7 +61,7 @@ pub fn validate_and_apply_move(
     }
 
     let mut is_capture = false;
-    if let Some(target_piece_data) = board[to_row as usize][to_col as usize].as_ref() {
+    if let Some(target_piece_data) = game_state.board[to_row as usize][to_col as usize].as_ref() {
         if target_piece_data.color == player_color {
             return err!(ChessError::InvalidMoveCannotCaptureOwnPiece);
         }
@@ -77,18 +69,25 @@ pub fn validate_and_apply_move(
     }
 
     // 2. Validate piece-specific movement rules
-    if !is_legal_move_for_piece(board, source_piece_data, from_row, from_col, to_row, to_col, *en_passant_target, castling_rights, player_color) {
+    if !is_legal_move_for_piece(
+        &game_state.board,
+        &source_piece_data,
+        from_row, from_col, to_row, to_col,
+        game_state.en_passant_target,
+        &game_state.castling_rights,
+        player_color,
+    ) {
         return err!(ChessError::InvalidMoveIllegalPieceMovement);
     }
 
     let piece_type_moved = source_piece_data.piece_type;
 
-    // --- Simulate the move and check if it leaves own king in check ---
-    let mut temp_board = *board;
+    // 3. Simulate the move and check if it leaves own king in check
+    let mut temp_board = game_state.board; // Copy board for simulation
     let mut piece_to_move_temp = temp_board[from_row as usize][from_col as usize].take().unwrap();
     
     if piece_to_move_temp.piece_type == PieceType::Pawn {
-        if let Some(ep_square) = *en_passant_target {
+        if let Some(ep_square) = game_state.en_passant_target {
             if ep_square.row == to_row && ep_square.col == to_col &&
                (to_col as i8 - from_col as i8).abs() == 1 &&
                (to_row as i8 - from_row as i8).abs() == 1
@@ -110,11 +109,10 @@ pub fn validate_and_apply_move(
         return err!(ChessError::InvalidMoveLeavesKingInCheck);
     }
 
-    // --- Apply the move permanently to the actual board ---
-    let previous_en_passant_target = en_passant_target.take(); 
+    // --- Apply the move permanently to game_state ---
+    let previous_en_passant_target = game_state.en_passant_target.take(); 
 
-    let mut actual_captured_piece = board[to_row as usize][to_col as usize].take();
-
+    let mut actual_captured_piece = game_state.board[to_row as usize][to_col as usize].take();
     if piece_type_moved == PieceType::Pawn {
         if let Some(ep_square) = previous_en_passant_target {
             if ep_square.row == to_row && ep_square.col == to_col &&
@@ -122,25 +120,23 @@ pub fn validate_and_apply_move(
                (to_row as i8 - from_row as i8).abs() == 1
             {
                 let captured_pawn_row = if player_color == PlayerColor::White { to_row - 1 } else { to_row + 1 };
-                actual_captured_piece = board[captured_pawn_row as usize][to_col as usize].take();
+                actual_captured_piece = game_state.board[captured_pawn_row as usize][to_col as usize].take();
                 is_capture = true; 
             }
         }
     }
 
-    let mut piece_to_move_actual = board[from_row as usize][from_col as usize].take().unwrap();
+    let mut piece_to_move_actual = game_state.board[from_row as usize][from_col as usize].take().unwrap();
 
-    update_castling_rights(castling_rights, &piece_to_move_actual, from_row, from_col);
+    update_castling_rights(&mut game_state.castling_rights, &piece_to_move_actual, from_row, from_col);
 
     if piece_to_move_actual.piece_type == PieceType::King {
         let col_diff = to_col as i8 - from_col as i8;
         if col_diff.abs() == 2 { 
             let (rook_from_col, rook_to_col) = if col_diff > 0 { (7, 5) } else { (0, 3) };
-            if let Some(rook_piece) = board[from_row as usize][rook_from_col as usize].take() {
-                board[from_row as usize][rook_to_col as usize] = Some(rook_piece);
-            } else {
-                return err!(ChessError::InvalidMoveIllegalPieceMovement); 
-            }
+            if let Some(rook_piece) = game_state.board[from_row as usize][rook_from_col as usize].take() {
+                game_state.board[from_row as usize][rook_to_col as usize] = Some(rook_piece);
+            } else { return err!(ChessError::InvalidMoveIllegalPieceMovement); }
         }
     }
     
@@ -157,35 +153,40 @@ pub fn validate_and_apply_move(
         } else if promotion.is_some() { return err!(ChessError::InvalidPromotionNotOnLastRank); }
     } else if promotion.is_some() { return err!(ChessError::InvalidPromotionNotAPawn); }
 
-    board[to_row as usize][to_col as usize] = Some(piece_to_move_actual);
+    game_state.board[to_row as usize][to_col as usize] = Some(piece_to_move_actual);
 
     if piece_type_moved == PieceType::Pawn && (to_row as i8 - from_row as i8).abs() == 2 {
         let ep_row = (from_row as i8 + to_row as i8) / 2;
-        *en_passant_target = Some(EnPassantSquare { row: ep_row as u8, col: from_col });
+        game_state.en_passant_target = Some(EnPassantSquare { row: ep_row as u8, col: from_col });
     }
 
     if piece_type_moved == PieceType::Pawn || is_capture || actual_captured_piece.is_some() {
-        *halfmove_clock = 0;
+        game_state.halfmove_clock = 0;
     } else {
-        *halfmove_clock += 1;
+        game_state.halfmove_clock += 1;
     }
 
-    // Update fullmove number if Black moved
     if player_color == PlayerColor::Black {
-        *fullmove_number += 1;
+        game_state.fullmove_number += 1;
     }
+    game_state.current_turn = player_color.opponent(); // Switch turn
 
-    // --- Determine game result ---
-    let opponent_color = player_color.opponent();
-    if are_no_legal_moves(board, opponent_color, castling_rights, *en_passant_target) {
-        if is_king_in_check(board, opponent_color) {
+    // --- Determine game result for the opponent (whose turn it now is) ---
+    let opponent_color = game_state.current_turn; 
+    if are_no_legal_moves(
+        &game_state.board, 
+        opponent_color, 
+        &game_state.castling_rights,
+        game_state.en_passant_target 
+    ) {
+        if is_king_in_check(&game_state.board, opponent_color) {
             return Ok(MoveResult::Checkmate);
         } else {
             return Ok(MoveResult::Stalemate);
         }
     }
 
-    if *halfmove_clock >= 100 {
+    if game_state.halfmove_clock >= 100 {
         return Ok(MoveResult::Stalemate); 
     }
 
@@ -194,10 +195,10 @@ pub fn validate_and_apply_move(
 
 // --- Function to check if a player has ANY legal moves ---
 fn are_no_legal_moves(
-    board: &[[Option<Piece>; 8]; 8],
+    board: &[[Option<Piece>; 8]; 8], // Takes immutable board ref
     player_color: PlayerColor,
-    castling_rights: &CastlingRights,
-    en_passant_target: Option<EnPassantSquare>,
+    castling_rights: &CastlingRights, // Takes immutable castling_rights ref
+    en_passant_target: Option<EnPassantSquare>, // Takes EP by value (it's Copy)
 ) -> bool {
     for r_from_idx in 0..8 {
         for c_from_idx in 0..8 {
@@ -209,7 +210,7 @@ fn are_no_legal_moves(
                             if from_r == to_r && from_c == to_c { continue; }
 
                             if is_legal_move_for_piece(board, piece, from_r, from_c, to_r, to_c, en_passant_target, castling_rights, player_color) {
-                                let mut temp_board = *board;
+                                let mut temp_board = *board; 
                                 let mut temp_piece_to_move = temp_board[r_from_idx][c_from_idx].take().unwrap();
                                 
                                 if temp_piece_to_move.piece_type == PieceType::Pawn {
@@ -232,7 +233,7 @@ fn are_no_legal_moves(
                                 temp_board[r_to_idx][c_to_idx] = Some(temp_piece_to_move);
 
                                 if !is_king_in_check(&temp_board, player_color) {
-                                    return false; // Found a legal move
+                                    return false; 
                                 }
                             }
                         }
@@ -241,17 +242,17 @@ fn are_no_legal_moves(
             }
         }
     }
-    true // No legal moves found
+    true 
 }
 
 // --- Piece-Specific Movement Validation ---
 fn is_legal_move_for_piece(
-    board: &[[Option<Piece>; 8]; 8],
+    board: &[[Option<Piece>; 8]; 8], // Takes immutable board ref
     piece_data: &Piece,
     from_r: u8, from_c: u8,
     to_r: u8, to_c: u8,
-    en_passant_target: Option<EnPassantSquare>,
-    castling_rights: &CastlingRights,
+    en_passant_target: Option<EnPassantSquare>, // Takes EP by value
+    castling_rights: &CastlingRights,   // Takes immutable castling_rights ref
     current_player_color: PlayerColor,
 ) -> bool {
     if let Some(target_piece) = board[to_r as usize][to_c as usize] {
@@ -342,14 +343,15 @@ fn update_castling_rights(rights: &mut CastlingRights, moved_piece: &Piece, from
         }
     } else if moved_piece.piece_type == PieceType::Rook {
         if moved_piece.color == PlayerColor::White {
-            if from_r == 0 && from_c == 0 { rights.white_queenside = false; } // Rook from a1
-            if from_r == 0 && from_c == 7 { rights.white_kingside = false; } // Rook from h1
+            if from_r == 0 && from_c == 0 { rights.white_queenside = false; }
+            if from_r == 0 && from_c == 7 { rights.white_kingside = false; }
         } else { // Black
-            if from_r == 7 && from_c == 0 { rights.black_queenside = false; } // Rook from a8
-            if from_r == 7 && from_c == 7 { rights.black_kingside = false; } // Rook from h8
+            if from_r == 7 && from_c == 0 { rights.black_queenside = false; }
+            if from_r == 7 && from_c == 7 { rights.black_kingside = false; }
         }
     }
 }
+
 fn is_valid_castling_move(
     board: &[[Option<Piece>; 8]; 8],
     from_r: u8, from_c: u8, to_r: u8, to_c: u8,
@@ -365,18 +367,14 @@ fn is_valid_castling_move(
     if to_c == 6 { // Kingside (G file)
         let can_castle = if player_color == PlayerColor::White { rights.white_kingside } else { rights.black_kingside };
         if !can_castle { return false; }
-        // Squares F and G must be empty
         if board[king_initial_row as usize][5].is_some() || board[king_initial_row as usize][6].is_some() { return false; }
-        // Squares E (current), F, G must not be attacked
         if is_square_attacked(board, king_initial_row, 5, attacker_color) || 
            is_square_attacked(board, king_initial_row, 6, attacker_color) { return false; }
         return true;
     } else if to_c == 2 { // Queenside (C file)
         let can_castle = if player_color == PlayerColor::White { rights.white_queenside } else { rights.black_queenside };
         if !can_castle { return false; }
-        // Squares D, C, B must be empty
         if board[king_initial_row as usize][3].is_some() || board[king_initial_row as usize][2].is_some() || board[king_initial_row as usize][1].is_some() { return false; }
-        // Squares E (current), D, C must not be attacked
         if is_square_attacked(board, king_initial_row, 3, attacker_color) || 
            is_square_attacked(board, king_initial_row, 2, attacker_color) { return false; }
         return true;
@@ -502,6 +500,6 @@ fn is_square_attacked(
 pub fn is_king_in_check(board: &[[Option<Piece>; 8]; 8], king_color: PlayerColor) -> bool {
     match find_king(board, king_color) {
         Ok((kr, kc)) => is_square_attacked(board, kr, kc, king_color.opponent()),
-        Err(_) => true, 
+        Err(_) => true, // If king not found, treat as an error state / king effectively in check
     }
 }

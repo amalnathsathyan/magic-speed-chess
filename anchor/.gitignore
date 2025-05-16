@@ -8,5 +8,5 @@ target/test-ledger
 target/.rustc_info.json
 **/*.rs.bk
 node_modules
-test-ledger
+test-ledger/
 .yarn

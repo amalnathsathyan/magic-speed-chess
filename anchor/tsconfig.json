@@ -2,8 +2,8 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "module": "es2015",
-    "types": ["mocha", "node"],
-    "typeRoots": ["./node_modules/@types"],
+    "types": ["jest", "node"],
+    "typeRoots": ["../node_modules/@types"],
     "lib": ["es2015"],
     "target": "es6",
     "resolveJsonModule": true,
