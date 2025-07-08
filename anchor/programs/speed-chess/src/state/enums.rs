@@ -1,7 +1,7 @@
-// src/state/enums.rs
 use anchor_lang::prelude::*;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -11,46 +11,38 @@ pub enum PieceType {
     King,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum PlayerColor {
     White,
     Black,
 }
 
-impl PlayerColor {
-    pub fn opponent(&self) -> Self {
-        match self {
-            PlayerColor::White => PlayerColor::Black,
-            PlayerColor::Black => PlayerColor::White,
-        }
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum GameStatus {
     WaitingForOpponent,
     Active,
-    WhiteWins,
-    BlackWins,
+    WhiteWin,
+    BlackWin,
     Draw,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum GameEndReason {
     Checkmate,
     Stalemate,
     Resignation,
     Timeout,
-    FiftyMoveRule,
-    // ThreefoldRepetition, // Potentially later
-    // InsufficientMaterial, // Potentially later
+    Agreement,
 }
 
-// Result of a single move, used internally by chess_logic
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+#[derive(InitSpace)]
 pub enum MoveResult {
     Normal,
-    Checkmate,      // Opponent is checkmated by this move
-    Stalemate,      // Game is a stalemate after this move (includes 50-move rule for now)
-    // Check,        // If you want to explicitly signal a check without ending the game
+    Checkmate,
+    Stalemate,
 }
+
