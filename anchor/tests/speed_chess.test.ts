@@ -65,14 +65,15 @@ describe('SpeedChess Program Tests', () => {
     console.log('Loading mint keypairs...')
     try {
       sendMintKp = await getKeypairFromFile(
-        '/Users/amalnathsathyan/Documents/trycatchblock/magic-speed-chess/anchor/tests/test-keys/SENDYLjLBaTgjyfXtPP2aHUt91WhNzX7iUfpThyApht.json',
+        
+        '/Users/aditya/Documents/magic-speed-chess/anchor/tests/test-keys/SENDYLjLBaTgjyfXtPP2aHUt91WhNzX7iUfpThyApht.json',
       )
       wsolMintKp = await getKeypairFromFile(
-        '/Users/amalnathsathyan/Documents/trycatchblock/magic-speed-chess/anchor/tests/test-keys/WSiBAnrREwNLdGkDpXuqdKL4fJvAHeJhDfehmFdMdvw.json',
+        '/Users/aditya/Documents/magic-speed-chess/anchor/tests/test-keys/WSiBAnrREwNLdGkDpXuqdKL4fJvAHeJhDfehmFdMdvw.json',
       )
       // Assuming you have a different keypair file for the unsupported mint
       unsupportedMintKp = await getKeypairFromFile(
-        '/Users/amalnathsathyan/Documents/trycatchblock/magic-speed-chess/anchor/tests/test-keys/un72dZJgdTp7x6Ckgxhk8p5bpVu3Mt23wSm1f6FNVeG.json',
+        '/Users/aditya/Documents/magic-speed-chess/anchor/tests/test-keys/un72dZJgdTp7x6Ckgxhk8p5bpVu3Mt23wSm1f6FNVeG.json',
       )
       console.log('Mint keypairs loaded successfully.')
     } catch (e) {
@@ -1851,51 +1852,111 @@ describe('SpeedChess Program Tests', () => {
     }, 10000)
 
     it('Test 3.7: Pawn promotion', async () => {
-  // (Fresh match and funding setup as in prior tests...)
+  // Use a unique match ID for isolation
+  const testMatchId = 'promotion-' + Math.floor(Math.random() * 1e9)
+  const [chessMatchPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+    program.programId,
+  )
+  const [escrowPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+    program.programId,
+  )
 
+  // Fund players and mint tokens
+  await provider.connection.requestAirdrop(whitePlayer.publicKey, LAMPORTS_PER_SOL)
+  await provider.connection.requestAirdrop(blackPlayer.publicKey, LAMPORTS_PER_SOL)
+  await mintTo(
+    provider.connection,
+    whitePlayer,
+    sendMintPubkey,
+    whitePlayerSendAta,
+    whitePlayer.publicKey,
+    sendBetAmount.toNumber(),
+  )
+  await mintTo(
+    provider.connection,
+    whitePlayer,
+    sendMintPubkey,
+    blackPlayerSendAta,
+    whitePlayer.publicKey,
+    sendBetAmount.toNumber(),
+  )
+
+  // Initialize match and join
+  await program.methods
+    .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+    .accounts({
+      chessMatch: chessMatchPda,
+      playerSigner: whitePlayer.publicKey,
+      bettingTokenMintAccount: sendMintPubkey,
+      playerTokenAccount: whitePlayerSendAta,
+      matchEscrowTokenAccount: escrowPda,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .signers([whitePlayer])
+    .rpc({ commitment: 'confirmed' })
+
+  const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+    commitment: 'confirmed',
+  })
+  const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+  await programForBlackPlayer.methods
+    .joinMatch(sendBetAmount)
+    .accounts({
+      chessMatch: chessMatchPda,
+      playerSigner: blackPlayer.publicKey,
+      playerTokenAccount: blackPlayerSendAta,
+      matchEscrowTokenAccount: escrowPda,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc({ commitment: 'confirmed' })
+
+  // Move sequence to promote a2 pawn to a8 as queen
   // 1. White: a2-a4
   await program.methods.makeMove({ fromRow: 1, fromCol: 0, toRow: 3, toCol: 0, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
     .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
-  // 2. Black: a7-a6
-  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 0, toRow: 5, toCol: 0, promotion: null })
+  // 2. Black: h7-h6 (dummy)
+  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 7, toRow: 5, toCol: 7, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
     .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
   // 3. White: a4-a5
   await program.methods.makeMove({ fromRow: 3, fromCol: 0, toRow: 4, toCol: 0, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
     .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
-  // 4. Black: b7-b6
-  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 1, toRow: 5, toCol: 1, promotion: null })
+  // 4. Black: h6-h5 (dummy)
+  await programForBlackPlayer.methods.makeMove({ fromRow: 5, fromCol: 7, toRow: 4, toCol: 7, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
     .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
-  // 5. White: a5xa6 (capture)
+  // 5. White: a5-a6
   await program.methods.makeMove({ fromRow: 4, fromCol: 0, toRow: 5, toCol: 0, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
     .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
-  // 6. Black: c7-c6
-  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 2, toRow: 5, toCol: 2, promotion: null })
+  // 6. Black: h5-h4 (dummy)
+  await programForBlackPlayer.methods.makeMove({ fromRow: 4, fromCol: 7, toRow: 3, toCol: 7, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
     .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
   // 7. White: a6-a7
-  await program.methods.makeMove({ fromRow: 5, fromCol: 0, toRow: 6, toCol: 0, promotion: null })
+  await program.methods.makeMove({ fromRow: 5, fromCol: 0, toRow: 6, toCol: 1, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
     .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
-  // 8. Black: d7-d6 (dummy)
-  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 3, toRow: 5, toCol: 3, promotion: null })
+  // 8. Black: h4-h3 (dummy)
+  await programForBlackPlayer.methods.makeMove({ fromRow: 3, fromCol: 7, toRow: 2, toCol: 7, promotion: null })
     .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
     .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
   // 9. White: a7-a8=Q (promotion)
-  await program.methods.makeMove({ fromRow: 6, fromCol: 0, toRow: 7, toCol: 0, promotion: { queen: {} } })
+  await program.methods.makeMove({ fromRow: 6, fromCol: 1, toRow: 7, toCol: 0, promotion: { queen: {} } })
     .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
     .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
 
-  // Verify promotion
+  // Assert promotion
   const matchState = await program.account.chessMatch.fetch(chessMatchPda)
   assert.deepStrictEqual(matchState.board[7][0]?.pieceType, { queen: {} }, 'Pawn should have promoted to Queen')
   assert.deepStrictEqual(matchState.board[7][0]?.color, { white: {} }, 'Promoted piece should be White')
-  assert.isNull(matchState.board[6][0], 'a7 should be empty after promotion')
+  assert.isNull(matchState.board[6][1], 'a7 should be empty after promotion')
 }, 30000)
-
   })
 })
