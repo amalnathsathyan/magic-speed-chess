@@ -47,3 +47,4 @@ next-env.d.ts
 /anchor/target/sbf-solana-solana
 /anchor/target/test-ledger
 /anchor/target/.rustc_info.json
+/anchor/test-ledger

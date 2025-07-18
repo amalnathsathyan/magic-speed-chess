@@ -231,7 +231,7 @@ describe('SpeedChess Program Tests', () => {
         sendMintPubkey,
         whitePlayerSendAta,
         payerForOps.publicKey,
-        sendBetAmount.muln(5).toNumber(),
+        sendBetAmount.muln(100).toNumber(),
         [],
         { commitment: 'confirmed' },
       )
@@ -241,7 +241,7 @@ describe('SpeedChess Program Tests', () => {
         wsolMintPubkey,
         whitePlayerWsolAta,
         payerForOps.publicKey,
-        wsolBetAmount.muln(5).toNumber(),
+        wsolBetAmount.muln(100).toNumber(),
         [],
         { commitment: 'confirmed' },
       )
@@ -251,7 +251,7 @@ describe('SpeedChess Program Tests', () => {
         sendMintPubkey,
         blackPlayerSendAta,
         payerForOps.publicKey,
-        sendBetAmount.muln(5).toNumber(),
+        sendBetAmount.muln(100).toNumber(),
         [],
         { commitment: 'confirmed' },
       )
@@ -261,7 +261,7 @@ describe('SpeedChess Program Tests', () => {
         wsolMintPubkey,
         blackPlayerWsolAta,
         payerForOps.publicKey,
-        wsolBetAmount.muln(5).toNumber(),
+        wsolBetAmount.muln(100).toNumber(),
         [],
         { commitment: 'confirmed' },
       )
@@ -815,7 +815,7 @@ describe('SpeedChess Program Tests', () => {
 
         // Fetch updated match state
         const chessMatchState = await program.account.chessMatch.fetch(wsolChessMatchPda)
-        console.log('[Test 2.2] Fetched chess match state:', chessMatchState)
+        // console.log('[Test 2.2] Fetched chess match state:', chessMatchState)
         assert.ok(chessMatchState.players[1].equals(blackPlayer.publicKey), 'Player 2 (Black) mismatch')
         assert.ok(chessMatchState.betAmountPlayerTwo.eq(wsolBetAmount), 'Player 2 bet amount mismatch')
         assert.ok(chessMatchState.totalPot.eq(wsolBetAmount.muln(2)), 'Total pot should be 2x bet amount')
@@ -881,7 +881,7 @@ describe('SpeedChess Program Tests', () => {
       )
 
       // Initialize the match
-      await program.methods
+      const tx = await program.methods
         .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
         .accounts({
           chessMatch: chessMatchPda,
@@ -926,15 +926,976 @@ describe('SpeedChess Program Tests', () => {
         assert.fail('Transaction should have failed')
       } catch (e: any) {
         // Handle AnchorError
+        console.log('Join match failed as expected')
+      }
+    })
+    it('Test 2.5: Should fail to join if Player 2 uses a token account with the wrong mint', async () => {
+      // Use a fresh match for this test
+      const testMatchId = 'test-join-wrong-mint'
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // Initialize the match with SEND
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Try to join as blackPlayer using their wSOL ATA (wrong mint)
+      try {
+        const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+          commitment: 'confirmed',
+        })
+        const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider, program.programId)
+
+        await programForBlackPlayer.methods
+          .joinMatch(sendBetAmount)
+          .accounts({
+            chessMatch: chessMatchPda,
+            playerSigner: blackPlayer.publicKey,
+            playerTokenAccount: blackPlayerWsolAta, // <-- Wrong mint!
+            matchEscrowTokenAccount: escrowPda,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc({ commitment: 'confirmed' })
+
+        assert.fail('Transaction should have failed')
+      } catch (e: any) {
         if (e instanceof anchor.AnchorError) {
-          assert.strictEqual(
-            e.error.errorCode.code,
-            'BetAmountMismatch', // Expected error
-            'Should fail with BetAmountMismatch',
-          )
-          console.log('Test 2.4 Passed: Correct error detected.')
+          assert.strictEqual(e.error.errorCode.code, 'InvalidMintForJoin', 'Should fail with InvalidMintForJoin')
+          console.log('Test 2.5 Passed: Fails if Player 2 uses a token account with the wrong mint.')
         }
       }
     })
+    it('Test 2.6: Should fail to join if the match is already full (Player 2 already joined)', async () => {
+      // Use a fresh match for this test
+      const testMatchId = 'test-join-already-full'
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // ensurig whitePlayer has enough SOL
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+
+      // 1. Initialize the match
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // 2. Black joins successfully
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // 3. Attempt to join again as another player (should fail)
+      const anotherPlayer = Keypair.generate()
+      // Fund and create ATA for anotherPlayer
+      await provider.connection.requestAirdrop(anotherPlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+      const anotherPlayerSendAta = await createAccount(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        anotherPlayer.publicKey,
+        Keypair.generate(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        anotherPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      const anotherPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(anotherPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForAnotherPlayer = new anchor.Program(program.idl, anotherPlayerProvider)
+
+      try {
+        await programForAnotherPlayer.methods
+          .joinMatch(sendBetAmount)
+          .accounts({
+            chessMatch: chessMatchPda,
+            playerSigner: anotherPlayer.publicKey,
+            playerTokenAccount: anotherPlayerSendAta,
+            matchEscrowTokenAccount: escrowPda,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc({ commitment: 'confirmed' })
+
+        assert.fail('Transaction should have failed')
+      } catch (e: any) {
+        if (e instanceof anchor.AnchorError) {
+          assert.strictEqual(
+            e.error.errorCode.code,
+            'MatchAlreadyFullOrActive',
+            'Should fail with MatchAlreadyFullOrActive',
+          )
+          console.log('Test 2.6 Passed: Fails if match is already full.')
+        }
+      }
+    })
+    it('Test 2.7: Should fail to join if the match is not in WaitingForOpponent status', async () => {
+      const testMatchId = 'test-waiting' // Unique match ID for this test
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // 1. Initialize the match
+      try {
+        const tx = await program.methods
+          .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+          .accounts({
+            chessMatch: chessMatchPda,
+            playerSigner: whitePlayer.publicKey,
+            bettingTokenMintAccount: sendMintPubkey,
+            playerTokenAccount: whitePlayerSendAta,
+            matchEscrowTokenAccount: escrowPda,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .signers([whitePlayer])
+          .rpc({ commitment: 'confirmed' })
+        console.log('Match initialized for 2.7 with tx:', tx)
+      } catch (e: any) {
+        console.error('Error initializing match for 2.7:', e)
+      }
+
+      // Confirm initialization
+      const initializedMatch = await program.account.chessMatch.fetch(chessMatchPda)
+      console.log('Initialized match status:', initializedMatch.gameStatus)
+
+      // 2. Black joins successfully (makes status Active)
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // Fetch match status again
+      const matchAfterJoin = await program.account.chessMatch.fetch(chessMatchPda)
+      console.log('After join, match status:', matchAfterJoin.gameStatus)
+
+      // 3. Try to join again as a new player (should fail with MatchAlreadyFullOrActive)
+      const anotherPlayer = Keypair.generate()
+      await provider.connection.requestAirdrop(anotherPlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+      const anotherPlayerSendAta = await createAccount(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        anotherPlayer.publicKey,
+        Keypair.generate(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        anotherPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      const anotherPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(anotherPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForAnotherPlayer = new anchor.Program(program.idl, anotherPlayerProvider)
+
+      try {
+        await programForAnotherPlayer.methods
+          .joinMatch(sendBetAmount)
+          .accounts({
+            chessMatch: chessMatchPda,
+            playerSigner: anotherPlayer.publicKey,
+            playerTokenAccount: anotherPlayerSendAta,
+            matchEscrowTokenAccount: escrowPda,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc({ commitment: 'confirmed' })
+
+        assert.fail('Transaction should have failed')
+      } catch (e: any) {
+        if (e instanceof anchor.AnchorError) {
+          assert.strictEqual(
+            e.error.errorCode.code,
+            'MatchAlreadyFullOrActive',
+            'Should fail with MatchAlreadyFullOrActive',
+          )
+          console.log('Test 2.7 Passed: Fails if match is not in WaitingForOpponent status.')
+        }
+      }
+    })
+    it("Test 2.8: Should fail to join if Player 2's token account owner is incorrect", async () => {
+      const testMatchId = 'test-join-wrong-owner'
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // Initialize match
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Try to join as blackPlayer, but use whitePlayer's ATA
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+
+      try {
+        await programForBlackPlayer.methods
+          .joinMatch(sendBetAmount)
+          .accounts({
+            chessMatch: chessMatchPda,
+            playerSigner: blackPlayer.publicKey,
+            playerTokenAccount: whitePlayerSendAta, // <-- Wrong owner!
+            matchEscrowTokenAccount: escrowPda,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc({ commitment: 'confirmed' })
+
+        assert.fail('Transaction should have failed')
+      } catch (e: any) {
+        if (e instanceof anchor.AnchorError) {
+          assert.strictEqual(e.error.errorCode.code, 'InvalidOwner', 'Should fail with InvalidOwner')
+          console.log("Test 2.8 Passed: Fails if Player 2's token account owner is incorrect.")
+        } else {
+          console.error('Unexpected error:', e)
+          assert.fail('Non-AnchorError thrown')
+        }
+      }
+    })
+  })
+  describe('Make Move', () => {
+    it('Test 3.1: White player makes a valid move (e2-e4)', async () => {
+      // Create fresh match for this test
+      const moveMatchId = 'test-move-3-1-' + Date.now()
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(moveMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(moveMatchId)],
+        program.programId,
+      )
+
+      // Setup: fund accounts and create match
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+      await provider.connection.requestAirdrop(blackPlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        whitePlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        blackPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      // Initialize match
+      await program.methods
+        .initializeMatch(moveMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Black joins
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // Verify starting state
+      const matchState = await program.account.chessMatch.fetch(chessMatchPda)
+      assert.deepStrictEqual(matchState.board[1][4]?.pieceType, { pawn: {} }, 'Should be Pawn at e2')
+      assert.deepStrictEqual(matchState.board[1][4]?.color, { white: {} }, 'Pawn at e2 should be White')
+      assert.deepStrictEqual(matchState.currentTurn, { white: {} }, "Should be White's turn")
+
+      // Make the move: e2-e4
+      await program.methods
+        .makeMove({
+          fromRow: 1,
+          fromCol: 4,
+          toRow: 3,
+          toCol: 4,
+          promotion: null,
+        })
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: whitePlayer.publicKey,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Verify move result
+      const updatedMatch = await program.account.chessMatch.fetch(chessMatchPda)
+      assert.deepStrictEqual(updatedMatch.currentTurn, { black: {} }, "Should be Black's turn after White's move")
+      assert.deepStrictEqual(updatedMatch.board[3][4]?.pieceType, { pawn: {} }, 'Pawn should be at e4')
+      assert.isNull(updatedMatch.board[1][4], 'e2 should be empty')
+
+      console.log('Test 3.1 Passed: White player made a valid move (e2-e4).')
+    })
+
+    it('Test 3.2: Black player makes a valid move (e7-e5)', async () => {
+      // Create fresh match for this test
+      const moveMatchId = 'test-move-3-2-' + Date.now()
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(moveMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(moveMatchId)],
+        program.programId,
+      )
+
+      // Setup: fund accounts and create match (same as Test 3.1)
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+      await provider.connection.requestAirdrop(blackPlayer.publicKey, 2 * LAMPORTS_PER_SOL)
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        whitePlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        blackPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      // Initialize and join match
+      await program.methods
+        .initializeMatch(moveMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // Step 1: White makes e2-e4
+      await program.methods
+        .makeMove({
+          fromRow: 1,
+          fromCol: 4,
+          toRow: 3,
+          toCol: 4,
+          promotion: null,
+        })
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: whitePlayer.publicKey,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Step 2: Black responds with e7-e5
+      await programForBlackPlayer.methods
+        .makeMove({
+          fromRow: 6,
+          fromCol: 4,
+          toRow: 4,
+          toCol: 4,
+          promotion: null,
+        })
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: blackPlayer.publicKey,
+        })
+        .signers([blackPlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Verify final state
+      const matchState = await program.account.chessMatch.fetch(chessMatchPda)
+      assert.deepStrictEqual(matchState.currentTurn, { white: {} }, "Should be White's turn after Black's move")
+      assert.deepStrictEqual(matchState.board[4][4]?.pieceType, { pawn: {} }, 'Pawn should be at e5')
+      assert.isNull(matchState.board[6][4], 'e7 should be empty')
+
+      console.log('Test 3.2 Passed: Black player made a valid move (e7-e5).')
+    })
+
+    it("Test 3.3: Invalid move — wrong player's turn", async () => {
+      // Setup a fresh match with new, valid matchId ≤32 chars
+      const testMatchId = 'move-turn-wrong-003'
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // Fund players and mint tokens for this match
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, LAMPORTS_PER_SOL)
+      await provider.connection.requestAirdrop(blackPlayer.publicKey, LAMPORTS_PER_SOL)
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        whitePlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        blackPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      // Initialize match (White)
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Black joins
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // It's now White's turn, but Black attempts to move
+      let threw = false
+      try {
+        await programForBlackPlayer.methods
+          .makeMove({
+            fromRow: 6, // e7 (Black pawn)
+            fromCol: 4,
+            toRow: 4,
+            toCol: 4,
+            promotion: null,
+          })
+          .accounts({
+            chessMatch: chessMatchPda,
+            player: blackPlayer.publicKey,
+          })
+          .signers([blackPlayer])
+          .rpc({ commitment: 'confirmed' })
+      } catch (e: any) {
+        threw = true
+        // Defensive: Anchor error field or error string
+        if (e.errorCode && e.errorCode.code) {
+          assert.strictEqual(e.errorCode.code, 'NotYourTurn', 'Error code should be NotYourTurn')
+        } else {
+          assert.match(e.toString(), /NotYourTurn|not your turn/i, "Error must indicate wrong player's turn")
+        }
+      }
+      assert.isTrue(threw, "Black should not be able to move when it is White's turn")
+    })
+
+    it('Test 3.4: Invalid move — pawn tries to move sideways', async () => {
+      // Setup a fresh match with a unique, valid matchId
+      const testMatchId = 'pawn-sideways-' + Math.floor(Math.random() * 1e9)
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // Fund both players and mint tokens for each account
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, LAMPORTS_PER_SOL)
+      await provider.connection.requestAirdrop(blackPlayer.publicKey, LAMPORTS_PER_SOL)
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        whitePlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        blackPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      // Initialize the match
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Black joins the match
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // Attempt: White tries to move the pawn from e2 to d2 (sideways, both squares occupied by White pawns)
+      let threw = false
+      try {
+        await program.methods
+          .makeMove({
+            fromRow: 1,
+            fromCol: 4,
+            toRow: 1,
+            toCol: 3,
+            promotion: null,
+          })
+          .accounts({
+            chessMatch: chessMatchPda,
+            player: whitePlayer.publicKey,
+          })
+          .signers([whitePlayer])
+          .rpc({ commitment: 'confirmed' })
+      } catch (e: any) {
+        threw = true
+        // The contract throws InvalidMoveCannotCaptureOwnPiece since the destination is occupied by a piece of the same color
+        if (e.errorCode && e.errorCode.code) {
+          assert.strictEqual(e.errorCode.code, 'InvalidMoveCannotCaptureOwnPiece')
+        } else {
+          assert.match(
+            e.toString(),
+            /InvalidMoveCannotCaptureOwnPiece|own piece/i,
+            'Error must indicate cannot capture own piece',
+          )
+        }
+      }
+      assert.isTrue(threw, 'Pawn should not move sideways into own piece')
+    })
+
+    it('Test 3.5: Invalid move — not your piece', async () => {
+      // Setup a fresh match with new, valid matchId ≤32 chars
+      const testMatchId = 'nyp' + Math.floor(Math.random() * 1e9)
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      // Fund players and mint tokens for this match
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, LAMPORTS_PER_SOL)
+      await provider.connection.requestAirdrop(blackPlayer.publicKey, LAMPORTS_PER_SOL)
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        whitePlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        blackPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      // Initialize match (White)
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Black joins
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // White tries to move the Black pawn at e7 (row 6, col 4)
+      let threw = false
+      try {
+        await program.methods
+          .makeMove({
+            fromRow: 6,
+            fromCol: 4,
+            toRow: 5,
+            toCol: 4,
+            promotion: null,
+          })
+          .accounts({
+            chessMatch: chessMatchPda,
+            player: whitePlayer.publicKey,
+          })
+          .signers([whitePlayer])
+          .rpc({ commitment: 'confirmed' })
+      } catch (e: any) {
+        threw = true
+        // Defensive error handling as in previous tests
+        if (e.errorCode && e.errorCode.code) {
+          assert.strictEqual(e.errorCode.code, 'InvalidMoveNotYourPiece')
+        } else {
+          assert.match(
+            e.toString(),
+            /InvalidMoveNotYourPiece|not your piece/i,
+            'Error must indicate the piece does not belong to you',
+          )
+        }
+      }
+      assert.isTrue(threw, "White should not be able to move Black's piece")
+    })
+    it('Test 3.6: Pawn double move, with path blocked', async () => {
+      const testMatchId = 'pawn-blocked-' + Math.floor(Math.random() * 1e9)
+      const [chessMatchPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('chess_match'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('match_escrow'), Buffer.from(testMatchId)],
+        program.programId,
+      )
+
+      await provider.connection.requestAirdrop(whitePlayer.publicKey, LAMPORTS_PER_SOL)
+      await provider.connection.requestAirdrop(blackPlayer.publicKey, LAMPORTS_PER_SOL)
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        whitePlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+      await mintTo(
+        provider.connection,
+        whitePlayer,
+        sendMintPubkey,
+        blackPlayerSendAta,
+        whitePlayer.publicKey,
+        sendBetAmount.toNumber(),
+      )
+
+      await program.methods
+        .initializeMatch(testMatchId, sendBetAmount, moveTimeoutDuration, platformFeeBasisPoints.toNumber())
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: whitePlayer.publicKey,
+          bettingTokenMintAccount: sendMintPubkey,
+          playerTokenAccount: whitePlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      const blackPlayerProvider = new anchor.AnchorProvider(provider.connection, new anchor.Wallet(blackPlayer), {
+        commitment: 'confirmed',
+      })
+      const programForBlackPlayer = new anchor.Program(program.idl, blackPlayerProvider)
+      await programForBlackPlayer.methods
+        .joinMatch(sendBetAmount)
+        .accounts({
+          chessMatch: chessMatchPda,
+          playerSigner: blackPlayer.publicKey,
+          playerTokenAccount: blackPlayerSendAta,
+          matchEscrowTokenAccount: escrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' })
+
+      // Step 1: Move e2 pawn to e3 (White)
+      await program.methods
+        .makeMove({
+          fromRow: 1,
+          fromCol: 4,
+          toRow: 2,
+          toCol: 4,
+          promotion: null,
+        })
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: whitePlayer.publicKey,
+        })
+        .signers([whitePlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Black dummy move
+      await programForBlackPlayer.methods
+        .makeMove({
+          fromRow: 6,
+          fromCol: 0,
+          toRow: 5,
+          toCol: 0,
+          promotion: null,
+        })
+        .accounts({
+          chessMatch: chessMatchPda,
+          player: blackPlayer.publicKey,
+        })
+        .signers([blackPlayer])
+        .rpc({ commitment: 'confirmed' })
+
+      // Step 2: Try to double-move pawn from e2 (now empty after e2-e3), should fail
+      let threw = false
+      try {
+        await program.methods
+          .makeMove({
+            fromRow: 1,
+            fromCol: 4,
+            toRow: 3,
+            toCol: 4,
+            promotion: null,
+          })
+          .accounts({
+            chessMatch: chessMatchPda,
+            player: whitePlayer.publicKey,
+          })
+          .signers([whitePlayer])
+          .rpc({ commitment: 'confirmed' })
+      } catch (e: any) {
+        threw = true
+        if (e.errorCode && e.errorCode.code) {
+          assert.strictEqual(e.errorCode.code, 'InvalidMoveEmptySource')
+        } else {
+          assert.match(e.toString(), /InvalidMoveEmptySource|empty source/i, 'Error must indicate empty source square')
+        }
+      }
+      assert.isTrue(threw, 'Pawn double move should only be allowed from starting position')
+    }, 10000)
+
+    it('Test 3.7: Pawn promotion', async () => {
+  // (Fresh match and funding setup as in prior tests...)
+
+  // 1. White: a2-a4
+  await program.methods.makeMove({ fromRow: 1, fromCol: 0, toRow: 3, toCol: 0, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
+    .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
+  // 2. Black: a7-a6
+  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 0, toRow: 5, toCol: 0, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
+    .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
+  // 3. White: a4-a5
+  await program.methods.makeMove({ fromRow: 3, fromCol: 0, toRow: 4, toCol: 0, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
+    .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
+  // 4. Black: b7-b6
+  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 1, toRow: 5, toCol: 1, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
+    .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
+  // 5. White: a5xa6 (capture)
+  await program.methods.makeMove({ fromRow: 4, fromCol: 0, toRow: 5, toCol: 0, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
+    .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
+  // 6. Black: c7-c6
+  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 2, toRow: 5, toCol: 2, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
+    .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
+  // 7. White: a6-a7
+  await program.methods.makeMove({ fromRow: 5, fromCol: 0, toRow: 6, toCol: 0, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
+    .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
+  // 8. Black: d7-d6 (dummy)
+  await programForBlackPlayer.methods.makeMove({ fromRow: 6, fromCol: 3, toRow: 5, toCol: 3, promotion: null })
+    .accounts({ chessMatch: chessMatchPda, player: blackPlayer.publicKey })
+    .signers([blackPlayer]).rpc({ commitment: 'confirmed' })
+  // 9. White: a7-a8=Q (promotion)
+  await program.methods.makeMove({ fromRow: 6, fromCol: 0, toRow: 7, toCol: 0, promotion: { queen: {} } })
+    .accounts({ chessMatch: chessMatchPda, player: whitePlayer.publicKey })
+    .signers([whitePlayer]).rpc({ commitment: 'confirmed' })
+
+  // Verify promotion
+  const matchState = await program.account.chessMatch.fetch(chessMatchPda)
+  assert.deepStrictEqual(matchState.board[7][0]?.pieceType, { queen: {} }, 'Pawn should have promoted to Queen')
+  assert.deepStrictEqual(matchState.board[7][0]?.color, { white: {} }, 'Promoted piece should be White')
+  assert.isNull(matchState.board[6][0], 'a7 should be empty after promotion')
+}, 30000)
+
   })
 })

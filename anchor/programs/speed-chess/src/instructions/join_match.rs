@@ -18,7 +18,7 @@ pub struct JoinMatch<'info> {
         seeds = [b"chess_match", chess_match.match_id.as_bytes()], // Use the match_id from the account itself for seed
         bump = chess_match.bump,
         constraint = chess_match.game_status == GameStatus::WaitingForOpponent @ ChessError::MatchAlreadyFullOrActive, // Updated error
-        constraint = chess_match.players[1] == Pubkey::default() @ ChessError::MatchAlreadyFull, 
+        constraint = chess_match.players[1] == Pubkey::default() @ ChessError::MatchAlreadyFullOrActive, 
     )]
     pub chess_match: Account<'info, ChessMatch>,
 
