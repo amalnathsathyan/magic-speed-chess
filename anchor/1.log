@@ -1,7 +1,7 @@
 
 Found a 'test' script in the Anchor.toml. Running it as a test suite!
 
-Running test suite: "/Users/aditya/Documents/magic-speed-chess/anchor/Anchor.toml"
+Running test suite: "/Users/amalnathsathyan/Documents/trycatchblock/magic-speed-chess/anchor/Anchor.toml"
 
   console.log
     Starting beforeAll setup...
