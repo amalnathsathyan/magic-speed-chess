@@ -1,13 +1,21 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "module": "es2015",
-    "types": ["jest", "node"],
-    "typeRoots": ["../node_modules/@types"],
-    "lib": ["es2015"],
+    "module": "esnext",
+    "types": [
+      "jest",
+      "node"
+    ],
+    "typeRoots": [
+      "../node_modules/@types"
+    ],
+    "lib": [
+      "es2015"
+    ],
     "target": "es6",
-    "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
     "esModuleInterop": true
   }
 }

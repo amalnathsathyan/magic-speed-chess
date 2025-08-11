@@ -9,7 +9,7 @@ use crate::utils::*; // For initialize_chess_board (ensure this is in scope, e.g
                         // If initialize_chess_board is directly in utils module: use crate::utils::initialize_chess_board;
 
 // Define allowed token mints
-const SEND_TOKEN_MINT_STR: &str = "SENDYLjLBaTgjyfXtPP2aHUt91WhNzX7iUfpThyApht"; // mock-SEND mint
+const SEND_TOKEN_MINT_STR: &str = "6cusbMdbU38ijQXKjCdfjhkHchryMDxLjNjPsb2Ni6NZ"; // mock-SEND mint
 const WSOL_MINT_STR: &str = "WSiBAnrREwNLdGkDpXuqdKL4fJvAHeJhDfehmFdMdvw";     // mock-Wrapped SOL mint
 
 #[derive(Accounts)]
@@ -78,6 +78,11 @@ pub fn handler(
     let send_mint_pubkey = SEND_TOKEN_MINT_STR.parse::<Pubkey>().map_err(|_| error!(ChessError::InvalidPublicKeyString))?;
     let wsol_mint_pubkey = WSOL_MINT_STR.parse::<Pubkey>().map_err(|_| error!(ChessError::InvalidPublicKeyString))?;
     let actual_betting_token_mint_key = ctx.accounts.betting_token_mint_account.key();
+
+    // Add these debug messages:
+msg!("Expected SEND mint: {}", send_mint_pubkey);
+msg!("Expected wSOL mint: {}", wsol_mint_pubkey);
+msg!("Actual mint received: {}", actual_betting_token_mint_key);
 
     require!(
         actual_betting_token_mint_key == send_mint_pubkey || actual_betting_token_mint_key == wsol_mint_pubkey,
